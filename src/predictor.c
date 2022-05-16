@@ -33,6 +33,10 @@ int pcIndexBits = 10;  // Number of bits used for PC index, determine the size o
 int lhistoryBits = 10; // Number of bits used for Local History, determine the size of the branch history table (BHT)
 
 
+int ghistoryBits_custom = 12; // Number of bits used for Global History, determine the size of the Global branch history table (BHT)
+int pcIndexBits_custom = 10;  // Number of bits used for PC index, determine the size of the pattern history table (PHT)
+int lhistoryBits_custom = 11; // Number of bits used for Local History, determine the size of the branch history table (BHT)
+
 
 //------------------------------------//
 //      Predictor Data Structures     //
@@ -46,10 +50,10 @@ uint8_t *bht_gshare;
 uint64_t ghistory;
 
 //tournament
-uint32_t *local_bht;
 uint32_t *local_pht;
-uint32_t *global_pht;
-uint32_t *choice_pht;
+uint32_t *local_bht;
+uint32_t *global_bht;
+uint32_t *choice_bht;
 
 uint32_t gmask;
 uint32_t lmask;
@@ -168,18 +172,18 @@ void init_tournament() {
   }
   // Global PHT
   size = 1<<ghistoryBits;
-  global_pht = (uint32_t*) malloc(sizeof(uint32_t)*size);
+  global_bht = (uint32_t*) malloc(sizeof(uint32_t)*size);
   for(int i=0;i<size;i++)
   {
-    global_pht[i] = 1;
+    global_bht[i] = 1;
   }
 
   // Choice PHT
   size = 1<<ghistoryBits;
-  choice_pht = (uint32_t*) malloc(sizeof(uint32_t)*size);
+  choice_bht = (uint32_t*) malloc(sizeof(uint32_t)*size);
   for(int i=0;i<size;i++)
   {
-    choice_pht[i] = 2;
+    choice_bht[i] = 2;
   }
   
 }
@@ -198,7 +202,7 @@ tournament_predict(uint32_t pc) {
 
   //get ghistoryBits
   uint32_t ghistbits = ghistory & gmask;
-  choice = choice_pht[ghistbits];
+  choice = choice_bht[ghistbits];
   
   if(choice < 2)
   {
@@ -207,7 +211,7 @@ tournament_predict(uint32_t pc) {
   }
   else
   {
-    prediction = global_pht[ghistbits];
+    prediction = global_bht[ghistbits];
   }
 
   if(prediction > 1){
@@ -237,7 +241,7 @@ void train_tournament(uint32_t pc, uint8_t outcome) {
 
   //get ghistoryBits
   ghistbits = ghistory & gmask;
-  choice = choice_pht[ghistbits];
+  choice = choice_bht[ghistbits];
 
   lhist = lmask & local_pht[pc_lower_bits];
   lpred = local_bht[lhist];
@@ -245,27 +249,27 @@ void train_tournament(uint32_t pc, uint8_t outcome) {
     lpred = TAKEN;
   else
     lpred = NOTTAKEN;
-  gpred = global_pht[ghistbits];
+  gpred = global_bht[ghistbits];
   if(gpred>1)
     gpred = TAKEN;
   else
     gpred = NOTTAKEN;
 
-  if(gpred==outcome && lpred!=outcome && choice_pht[ghistbits]!=3)
-    choice_pht[ghistbits]++;
-  else if(gpred!=outcome && lpred==outcome && choice_pht[ghistbits]!=0)
-    choice_pht[ghistbits]--;
+  if(gpred==outcome && lpred!=outcome && choice_bht[ghistbits]!=3)
+    choice_bht[ghistbits]++;
+  else if(gpred!=outcome && lpred==outcome && choice_bht[ghistbits]!=0)
+    choice_bht[ghistbits]--;
   if(outcome==TAKEN)
   {
-    if(global_pht[ghistbits]!=3)
-      global_pht[ghistbits]++;
+    if(global_bht[ghistbits]!=3)
+      global_bht[ghistbits]++;
     if(local_bht[lhist]!=3)
       local_bht[lhist]++;
   }
   else
   {
-    if(global_pht[ghistbits]!=0)
-      global_pht[ghistbits]--;
+    if(global_bht[ghistbits]!=0)
+      global_bht[ghistbits]--;
     if(local_bht[lhist]!=0)
       local_bht[lhist]--;
   }
@@ -276,6 +280,154 @@ void train_tournament(uint32_t pc, uint8_t outcome) {
 
 
 
+
+
+
+//========================================================//
+//  CUSTOM 
+//========================================================//
+
+//tournament_gshare initilization function
+void init_tournament_gshare() {
+  ghistory = 0;
+  int size;
+
+  // make a mask for pc, local_pht, ghistory, 
+  uint32_t pht_entries = 1 << pcIndexBits_custom;
+  pcmask = pht_entries-1;
+
+  //get lower ghistoryBits
+  uint32_t mask = 1 << lhistoryBits_custom;
+  lmask = mask -1;
+
+  uint32_t bht_entries = 1 << ghistoryBits_custom;
+  gmask = bht_entries -1;
+  
+  
+  // Local PHT
+  size = 1<<pcIndexBits;
+  local_pht = (uint32_t*) malloc(sizeof(uint32_t)*size);
+  for(int i=0;i<size;i++)
+  {
+    local_pht[i] = 1;
+  }
+  // Local BHT
+  size = 1<<lhistoryBits;
+  local_bht = (uint32_t*) malloc(sizeof(uint32_t)*size);
+  for(int i=0;i<size;i++)
+  {
+    local_bht[i] = 0;
+  }
+  // Global PHT
+  size = 1<<ghistoryBits;
+  global_bht = (uint32_t*) malloc(sizeof(uint32_t)*size);
+  for(int i=0;i<size;i++)
+  {
+    global_bht[i] = 1;
+  }
+
+  // Choice PHT
+  size = 1<<ghistoryBits;
+  choice_bht = (uint32_t*) malloc(sizeof(uint32_t)*size);
+  for(int i=0;i<size;i++)
+  {
+    choice_bht[i] = 2;
+  }
+  
+}
+
+
+uint8_t 
+tournament_gshare_predict(uint32_t pc) {
+  
+  //tournament
+  uint32_t choice;
+  uint32_t lhist;
+  uint32_t prediction;
+
+  //get lower pht index from pc
+  uint32_t pc_lower_bits = pc & pcmask;
+
+  //get ghistoryBits and global_bht_index
+  uint32_t ghistbits = ghistory & gmask;
+  uint32_t pcindex = pc & gmask;
+  uint32_t global_bht_index = pcindex ^ ghistbits;
+  choice = choice_bht[global_bht_index];
+  
+  if(choice < 2)
+  {
+    lhist = lmask & local_pht[pc_lower_bits];
+    prediction = local_bht[lhist];
+  }
+  else
+  {
+    prediction = global_bht[global_bht_index];
+  }
+
+  if(prediction > 1){
+    return TAKEN;
+  }
+  else{
+    return NOTTAKEN;
+  }
+
+}
+
+
+void train_tournament_gshare(uint32_t pc, uint8_t outcome) {
+
+  // tournament
+  uint32_t choice;
+  uint32_t lhist;
+  uint32_t lpred;
+  uint32_t gpred;
+
+  //printf("Global Mask : %u\nLocal Mask : %u\nPC Mask : %u\n",gmask,lmask,pcmask);
+
+  //get lower pht index from pc
+  uint32_t pc_lower_bits = pc & pcmask;
+
+  //get ghistoryBits
+  uint32_t ghistbits = ghistory & gmask;
+  uint32_t pcindex = pc & gmask;
+  uint32_t global_bht_index = pcindex ^ ghistbits;
+
+  choice = choice_bht[global_bht_index];
+
+  lhist = lmask & local_pht[pc_lower_bits];
+  lpred = local_bht[lhist];
+  if(lpred>1)
+    lpred = TAKEN;
+  else
+    lpred = NOTTAKEN;
+  gpred = global_bht[global_bht_index];
+  if(gpred>1)
+    gpred = TAKEN;
+  else
+    gpred = NOTTAKEN;
+
+  if(gpred==outcome && lpred!=outcome && choice_bht[global_bht_index]!=3)
+    choice_bht[global_bht_index]++;
+  else if(gpred!=outcome && lpred==outcome && choice_bht[global_bht_index]!=0)
+    choice_bht[global_bht_index]--;
+  if(outcome==TAKEN)
+  {
+    if(global_bht[global_bht_index]!=3)
+      global_bht[global_bht_index]++;
+    if(local_bht[lhist]!=3)
+      local_bht[lhist]++;
+  }
+  else
+  {
+    if(global_bht[global_bht_index]!=0)
+      global_bht[global_bht_index]--;
+    if(local_bht[lhist]!=0)
+      local_bht[lhist]--;
+  }
+  local_pht[pc_lower_bits] = ((local_pht[pc_lower_bits]<<1) | outcome) & lmask;
+  ghistory = ((ghistory<<1) | outcome) & gmask;
+
+}
 
 
 
@@ -297,6 +449,8 @@ init_predictor()
       init_tournament();
       break;
     case CUSTOM:
+      init_tournament_gshare();
+      break;
     default:
       break;
   }
@@ -320,6 +474,7 @@ make_prediction(uint32_t pc)
     case TOURNAMENT:
       return tournament_predict(pc);
     case CUSTOM:
+      return tournament_gshare_predict(pc);
     default:
       break;
   }
@@ -344,6 +499,7 @@ train_predictor(uint32_t pc, uint8_t outcome)
     case TOURNAMENT:
       return train_tournament(pc, outcome);
     case CUSTOM:
+      return train_tournament_gshare(pc, outcome);
     default:
       break;
   }
