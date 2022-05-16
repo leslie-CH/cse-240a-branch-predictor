@@ -168,7 +168,7 @@ void init_tournament() {
   local_bht = (uint32_t*) malloc(sizeof(uint32_t)*size);
   for(int i=0;i<size;i++)
   {
-    local_bht[i] = 0;
+    local_bht[i] = 1;
   }
   // Global PHT
   size = 1<<ghistoryBits;
@@ -316,7 +316,7 @@ void init_tournament_gshare() {
   local_bht = (uint32_t*) malloc(sizeof(uint32_t)*size);
   for(int i=0;i<size;i++)
   {
-    local_bht[i] = 0;
+    local_bht[i] = 1;
   }
   // Global PHT
   size = 1<<ghistoryBits;
